@@ -1,35 +1,64 @@
+
+
+
+
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const http = require('http');
-
-
+const http = require('http'); // Import the built-in 'http' module
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+// ... (rest of your code)
+const allowedOrigins = ['https://itunes-search-store.onrender.com', 'http://localhost:3000']; // Add your deployed domain here
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+};
+let favorites = [];
+
+app.use(cors(corsOptions));
 app.use(helmet());
 app.use(bodyParser.json());
 
-let favorites = [];
-
-// Helper function to handle API requests
+// Helper function to handle API requests using 'http' module
 async function fetchData(url) {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('Network response was not ok.');
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    throw error;
-  }
+  return new Promise((resolve, reject) => {
+    http.get(url, (response) => {
+      const { statusCode } = response;
+      if (statusCode !== 200) {
+        reject(new Error(`Request failed with status code: ${statusCode}`));
+        response.resume();
+        return;
+      }
+
+      let rawData = '';
+      response.on('data', (chunk) => {
+        rawData += chunk;
+      });
+
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(rawData);
+          resolve(data);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }).on('error', (error) => {
+      reject(error);
+    });
+  });
 }
 
+// ... (rest of your code)
 // Endpoint to handle iTunes Search API requests
 app.post('/api/search', async (req, res) => {
   const { term, mediaType } = req.body;
@@ -50,6 +79,7 @@ app.post('/api/favorites', (req, res) => {
   favorites.push(item);
   res.sendStatus(200);
 });
+
 // Endpoint to delete favorite content
 app.delete('/api/favorites/:id', (req, res) => {
   const id = req.params.id;
@@ -57,11 +87,10 @@ app.delete('/api/favorites/:id', (req, res) => {
   res.sendStatus(200);
 });
 
-//const server = http.createServer(app)
-
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
 module.exports = server;
+
 
